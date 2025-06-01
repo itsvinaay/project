@@ -28,6 +28,9 @@
       "eas": {
         "projectId": "50ecca4d-c4be-4eb4-a29d-ed6ee2db05dc"
       }
+    },
+    "android": {
+      "package": "com.viralytrespect.vinayfit"
     }
   }
 }
