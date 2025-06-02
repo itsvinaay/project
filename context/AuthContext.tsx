@@ -46,25 +46,40 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       // Redirect to sign in if not signed in
       router.replace('/(auth)/signin');
     } else if (user && inAuthGroup) {
-      // Redirect to appropriate dashboard based on role
+      // Check if user is approved before redirecting
       if (userProfile) {
-        switch (userProfile.role) {
-          case 'admin':
-            router.replace('/(admin)');
-            break;
-          case 'trainer':
-            router.replace('/(trainer)');
-            break;
-          case 'nutritionist':
-            router.replace('/(nutritionist)');
-            break;
-          default:
-            router.replace('/(tabs)');
-            break;
+        if (!userProfile.isApproved && userProfile.role !== 'client') {
+          // Show pending approval message and redirect to sign in
+          Alert.alert(
+            'Account Pending Approval',
+            'Your account is waiting for admin approval. Please try again later.',
+            [
+              {
+                text: 'OK',
+                onPress: () => {
+                  signOut();
+                  router.replace('/(auth)/signin');
+                }
+              }
+            ]
+          );
+        } else {
+          // Redirect to appropriate dashboard based on role
+          switch (userProfile.role) {
+            case 'admin':
+              router.replace('/(admin)');
+              break;
+            case 'trainer':
+              router.replace('/(trainer)');
+              break;
+            case 'nutritionist':
+              router.replace('/(nutritionist)');
+              break;
+            default:
+              router.replace('/(tabs)');
+              break;
+          }
         }
-      } else {
-        // Default to client dashboard if role not determined yet
-        router.replace('/(tabs)');
       }
     }
   }, [user, isLoading, segments, router, userProfile]);
@@ -151,3 +166,4 @@ export const useAuth = () => useContext(AuthContext);
 
 // Import firebase functions
 import { signIn, signUp, signOut } from '@/utils/firebase';
+import { Alert } from 'react-native';

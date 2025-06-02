@@ -1,10 +1,39 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, Image, ScrollView } from 'react-native';
+import { 
+  View, 
+  Text, 
+  TextInput, 
+  TouchableOpacity, 
+  StyleSheet, 
+  Alert, 
+  Image, 
+  ScrollView,
+  Platform
+} from 'react-native';
 import { useRouter, Link } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { ActivityIndicator } from 'react-native';
-import { Lock, Mail, User } from 'lucide-react-native';
+import { Lock, Mail, User, ChevronDown } from 'lucide-react-native';
+import { UserRole } from '@/utils/firebase';
+
+const roles: { label: string; value: UserRole; description: string }[] = [
+  {
+    label: 'Client',
+    value: 'client',
+    description: 'Track your fitness journey and connect with trainers'
+  },
+  {
+    label: 'Trainer',
+    value: 'trainer',
+    description: 'Create workout plans and guide clients (requires approval)'
+  },
+  {
+    label: 'Nutritionist',
+    value: 'nutritionist',
+    description: 'Create meal plans and guide clients (requires approval)'
+  }
+];
 
 export default function SignUpScreen() {
   const { signUp, isLoading } = useAuth();
@@ -15,6 +44,8 @@ export default function SignUpScreen() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [selectedRole, setSelectedRole] = useState<UserRole>('client');
+  const [showRoleSelector, setShowRoleSelector] = useState(false);
   
   const handleSignUp = async () => {
     if (!email || !password || !displayName) {
@@ -28,12 +59,30 @@ export default function SignUpScreen() {
     }
     
     try {
-      await signUp(email, password, displayName);
-      // Navigation is handled in AuthContext
+      await signUp(email, password, displayName, selectedRole);
+      
+      if (selectedRole === 'client') {
+        // Clients are auto-approved, redirect to main app
+        router.replace('/(tabs)');
+      } else {
+        // Show pending approval message for other roles
+        Alert.alert(
+          'Registration Successful',
+          'Your account is pending admin approval. You will be notified when your account is approved.',
+          [
+            {
+              text: 'OK',
+              onPress: () => router.replace('/(auth)/signin')
+            }
+          ]
+        );
+      }
     } catch (error: any) {
       Alert.alert('Sign Up Failed', error.message || 'An error occurred during sign up');
     }
   };
+  
+  const selectedRoleData = roles.find(role => role.value === selectedRole);
   
   return (
     <ScrollView 
@@ -125,6 +174,63 @@ export default function SignUpScreen() {
             secureTextEntry
           />
         </View>
+        
+        <TouchableOpacity
+          style={[styles.roleSelector, { backgroundColor: theme.colors.dark[700] }]}
+          onPress={() => setShowRoleSelector(!showRoleSelector)}
+        >
+          <View style={styles.roleSelectorContent}>
+            <Text style={[styles.roleSelectorText, {
+              color: theme.colors.text.primary,
+              fontFamily: theme.fontFamily.medium
+            }]}>
+              {selectedRoleData?.label || 'Select Role'}
+            </Text>
+            <ChevronDown 
+              size={20} 
+              color={theme.colors.text.secondary}
+              style={[
+                styles.roleSelectorIcon,
+                showRoleSelector && styles.roleSelectorIconOpen
+              ]}
+            />
+          </View>
+        </TouchableOpacity>
+        
+        {showRoleSelector && (
+          <View style={[styles.roleOptions, { backgroundColor: theme.colors.dark[800] }]}>
+            {roles.map((role) => (
+              <TouchableOpacity
+                key={role.value}
+                style={[
+                  styles.roleOption,
+                  selectedRole === role.value && { 
+                    backgroundColor: theme.colors.primary[900] 
+                  }
+                ]}
+                onPress={() => {
+                  setSelectedRole(role.value);
+                  setShowRoleSelector(false);
+                }}
+              >
+                <View>
+                  <Text style={[styles.roleOptionLabel, {
+                    color: theme.colors.text.primary,
+                    fontFamily: theme.fontFamily.medium
+                  }]}>
+                    {role.label}
+                  </Text>
+                  <Text style={[styles.roleOptionDescription, {
+                    color: theme.colors.text.secondary,
+                    fontFamily: theme.fontFamily.regular
+                  }]}>
+                    {role.description}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
         
         <TouchableOpacity
           style={[styles.button, { backgroundColor: theme.colors.primary[500] }]}
@@ -223,6 +329,40 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 8,
     fontSize: 16,
+  },
+  roleSelector: {
+    borderRadius: 8,
+    marginBottom: 16,
+    padding: 12,
+  },
+  roleSelectorContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  roleSelectorText: {
+    fontSize: 16,
+  },
+  roleSelectorIcon: {
+    transform: [{ rotate: '0deg' }],
+  },
+  roleSelectorIconOpen: {
+    transform: [{ rotate: '180deg' }],
+  },
+  roleOptions: {
+    borderRadius: 8,
+    marginBottom: 16,
+    overflow: 'hidden',
+  },
+  roleOption: {
+    padding: 16,
+  },
+  roleOptionLabel: {
+    fontSize: 16,
+    marginBottom: 4,
+  },
+  roleOptionDescription: {
+    fontSize: 12,
   },
   button: {
     padding: 16,

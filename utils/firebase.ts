@@ -61,6 +61,9 @@ export interface UserProfile {
   displayName: string;
   role: UserRole;
   photoURL?: string;
+  isApproved: boolean;
+  approvedAt?: Timestamp;
+  approvedBy?: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -86,6 +89,7 @@ export const signUp = async (
     email: user.email || email,
     displayName,
     role,
+    isApproved: role === 'client', // Auto-approve clients, others need admin approval
     createdAt: Timestamp.now(),
     updatedAt: Timestamp.now(),
   };
@@ -115,6 +119,45 @@ export const updateUserProfile = async (userId: string, data: Partial<UserProfil
   
   await updateDoc(userRef, {
     ...data,
+    updatedAt: Timestamp.now(),
+  });
+};
+
+// Get pending approval users
+export const getPendingApprovalUsers = async () => {
+  const q = query(
+    collection(db, 'users'),
+    where('isApproved', '==', false)
+  );
+  
+  const querySnapshot = await getDocs(q);
+  const users: UserProfile[] = [];
+  
+  querySnapshot.forEach((doc) => {
+    users.push(doc.data() as UserProfile);
+  });
+  
+  return users;
+};
+
+// Approve user
+export const approveUser = async (userId: string, adminId: string) => {
+  const userRef = doc(db, 'users', userId);
+  
+  await updateDoc(userRef, {
+    isApproved: true,
+    approvedAt: Timestamp.now(),
+    approvedBy: adminId,
+    updatedAt: Timestamp.now(),
+  });
+};
+
+// Reject user
+export const rejectUser = async (userId: string) => {
+  const userRef = doc(db, 'users', userId);
+  
+  await updateDoc(userRef, {
+    isApproved: false,
     updatedAt: Timestamp.now(),
   });
 };
