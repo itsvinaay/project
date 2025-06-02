@@ -19,6 +19,7 @@ import {
   addDoc,
   updateDoc,
   Timestamp,
+  enableIndexedDbPersistence,
 } from 'firebase/firestore';
 
 // Firebase configuration
@@ -32,9 +33,24 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase only if it hasn't been initialized yet
-const app = initializeApp(firebaseConfig);
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
 const db = getFirestore(app);
+
+// Enable offline persistence
+try {
+  enableIndexedDbPersistence(db).catch((err) => {
+    if (err.code === 'failed-precondition') {
+      // Multiple tabs open, persistence can only be enabled in one tab at a time
+      console.warn('Firebase persistence failed: Multiple tabs open');
+    } else if (err.code === 'unimplemented') {
+      // The current browser doesn't support persistence
+      console.warn('Firebase persistence not supported in this environment');
+    }
+  });
+} catch (err) {
+  console.warn('Firebase persistence error:', err);
+}
 
 // User types
 export type UserRole = 'admin' | 'trainer' | 'nutritionist' | 'client';
