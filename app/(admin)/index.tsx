@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { 
   View, 
   Text, 
@@ -9,7 +9,14 @@ import {
 } from 'react-native';
 import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
-import { Users, UserCheck, UserX, ChartBar as BarChart3, LogOut, ChevronRight } from 'lucide-react-native';
+import { 
+  Users, 
+  UserCheck, 
+  UserX, 
+  ChartBar as BarChart3, 
+  LogOut, 
+  ChevronRight 
+} from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 
 export default function AdminDashboardScreen() {
