@@ -10,9 +10,9 @@ import HeartRateCard from '@/components/HeartRateCard';
 import WalkMap from '@/components/WalkMap';
 import { Bell } from 'lucide-react-native';
 import dayjs from 'dayjs';
-import { getActivityLogs, addActivityLog, Timestamp } from '@/utils/firebase';
+import { getActivityLogs, addActivityLog } from '@/utils/supabase';
 
-// Sample data - in a real app, this would come from Firebase and/or Google Fit API
+// Sample data - in a real app, this would come from Supabase and/or Google Fit API
 const SAMPLE_DATA = {
   steps: {
     data: [2341, 6423, 5243, 8675, 7654, 9876, 8543],
@@ -56,7 +56,7 @@ const SAMPLE_DATA = {
 
 export default function DashboardScreen() {
   const theme = useTheme();
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [waterCount, setWaterCount] = useState(SAMPLE_DATA.water.current);
@@ -79,14 +79,14 @@ export default function DashboardScreen() {
     setWaterCount(prev => {
       const newCount = prev + 1;
       
-      // In a real app, this would update Firebase
+      // In a real app, this would update Supabase
       if (user) {
         addActivityLog({
-          userId: user.uid,
+          user_id: user.id,
           type: 'water',
           value: newCount,
           unit: 'glasses',
-          date: Timestamp.now(),
+          date: new Date().toISOString(),
         });
       }
       
@@ -101,14 +101,14 @@ export default function DashboardScreen() {
       
       const newCount = prev - 1;
       
-      // In a real app, this would update Firebase
+      // In a real app, this would update Supabase
       if (user) {
         addActivityLog({
-          userId: user.uid,
+          user_id: user.id,
           type: 'water',
           value: newCount,
           unit: 'glasses',
-          date: Timestamp.now(),
+          date: new Date().toISOString(),
         });
       }
       
@@ -119,7 +119,7 @@ export default function DashboardScreen() {
   // Load user data on component mount
   useEffect(() => {
     if (user) {
-      // In a real app, this would fetch user's activity data from Firebase
+      // In a real app, this would fetch user's activity data from Supabase
       // fetchUserData();
     }
   }, [user]);
@@ -142,7 +142,7 @@ export default function DashboardScreen() {
               color: theme.colors.text.primary,
               fontFamily: theme.fontFamily.semiBold
             }]}>
-              {user?.displayName || 'User'}
+              {userProfile?.display_name || 'User'}
             </Text>
           </View>
           
@@ -200,25 +200,27 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: 16,
-    paddingTop: 56,
+    paddingHorizontal: 16,
+    paddingBottom: 30,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginTop: 16,
+    marginBottom: 24,
   },
   greeting: {
     fontSize: 16,
   },
   userName: {
     fontSize: 24,
+    marginTop: 4,
   },
   notificationButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },

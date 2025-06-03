@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -12,7 +12,10 @@ import {
 } from 'react-native';
 import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
-import { User, Settings, LogOut, Bell, Shield, CircleHelp as HelpCircle, ChevronRight, Moon } from 'lucide-react-native';
+import { User, Settings, LogOut, Bell, Shield, CircleHelp as HelpCircle, ChevronRight, Moon, Activity, Camera, Dumbbell, Footprints } from 'lucide-react-native';
+import { getActivityLogs } from '@/utils/supabase';
+import ActivityHistory from '@/components/ActivityHistory';
+import ProgressPhotos from '@/components/ProgressPhotos';
 
 export default function ProfileScreen() {
   const theme = useTheme();
@@ -20,6 +23,31 @@ export default function ProfileScreen() {
   
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [darkModeEnabled, setDarkModeEnabled] = useState(true);
+  const [userActivities, setUserActivities] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Fetch user activities
+  useEffect(() => {
+    const fetchActivities = async () => {
+      if (user?.id) {
+        try {
+          setIsLoading(true);
+          const activities = await getActivityLogs(user.id);
+          // Sort activities by date (newest first)
+          const sortedActivities = activities?.sort((a, b) => 
+            new Date(b.date).getTime() - new Date(a.date).getTime()
+          ) || [];
+          setUserActivities(sortedActivities);
+        } catch (error) {
+          console.error('Error fetching activities:', error);
+        } finally {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    fetchActivities();
+  }, [user?.id]);
   
   // Handle sign out
   const handleSignOut = async () => {
@@ -138,6 +166,41 @@ export default function ProfileScreen() {
           </View>
         </View>
         
+        {/* Weight Metrics Section */}
+        <View style={styles.settingsSection}>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { 
+              color: theme.colors.text.primary,
+              fontFamily: theme.fontFamily.semiBold
+            }]}>
+              Weight Metrics
+            </Text>
+            <TouchableOpacity>
+              <Text style={[styles.viewMoreText, { color: theme.colors.primary[500] }]}>
+                View More
+              </Text>
+            </TouchableOpacity>
+          </View>
+          
+          <View style={[styles.metricsCard, { backgroundColor: theme.colors.background.card }]}>
+            <View style={styles.metricItem}>
+              <Text style={[styles.metricValue, { color: theme.colors.primary[500] }]}>72.5 kg</Text>
+              <Text style={[styles.metricLabel, { color: theme.colors.text.secondary }]}>Current Weight</Text>
+            </View>
+            <View style={[styles.metricDivider, { backgroundColor: theme.colors.dark[700] }]} />
+            <View style={styles.metricItem}>
+              <Text style={[styles.metricValue, { color: theme.colors.success }]}>-2.3 kg</Text>
+              <Text style={[styles.metricLabel, { color: theme.colors.text.secondary }]}>This Month</Text>
+            </View>
+            <View style={[styles.metricDivider, { backgroundColor: theme.colors.dark[700] }]} />
+            <View style={styles.metricItem}>
+              <Text style={[styles.metricValue, { color: theme.colors.text.primary }]}>70.2 kg</Text>
+              <Text style={[styles.metricLabel, { color: theme.colors.text.secondary }]}>Target Weight</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Settings Section */}
         <View style={styles.settingsSection}>
           <Text style={[styles.sectionTitle, { 
             color: theme.colors.text.primary,
@@ -169,38 +232,33 @@ export default function ProfileScreen() {
             
             <View style={[styles.settingDivider, { backgroundColor: theme.colors.dark[800] }]} />
             
-            <View style={styles.settingItem}>
+            <TouchableOpacity style={styles.settingItem}>
               <View style={styles.settingLeft}>
                 <View style={[styles.settingIconContainer, { backgroundColor: theme.colors.primary[900] }]}>
-                  <Moon size={20} color={theme.colors.primary[500]} />
+                  <Activity size={20} color={theme.colors.primary[500]} />
                 </View>
                 <Text style={[styles.settingLabel, { 
                   color: theme.colors.text.primary,
                   fontFamily: theme.fontFamily.medium
                 }]}>
-                  Dark Mode
+                  Activity History
                 </Text>
               </View>
-              <Switch
-                value={darkModeEnabled}
-                onValueChange={toggleDarkMode}
-                trackColor={{ false: theme.colors.dark[700], true: theme.colors.primary[500] }}
-                thumbColor={theme.colors.white}
-              />
-            </View>
-            
+              <ChevronRight size={20} color={theme.colors.text.secondary} />
+            </TouchableOpacity>
+
             <View style={[styles.settingDivider, { backgroundColor: theme.colors.dark[800] }]} />
             
             <TouchableOpacity style={styles.settingItem}>
               <View style={styles.settingLeft}>
                 <View style={[styles.settingIconContainer, { backgroundColor: theme.colors.primary[900] }]}>
-                  <Shield size={20} color={theme.colors.primary[500]} />
+                  <Dumbbell size={20} color={theme.colors.primary[500]} />
                 </View>
                 <Text style={[styles.settingLabel, { 
                   color: theme.colors.text.primary,
                   fontFamily: theme.fontFamily.medium
                 }]}>
-                  Privacy & Security
+                  Your Exercises
                 </Text>
               </View>
               <ChevronRight size={20} color={theme.colors.text.secondary} />
@@ -211,13 +269,30 @@ export default function ProfileScreen() {
             <TouchableOpacity style={styles.settingItem}>
               <View style={styles.settingLeft}>
                 <View style={[styles.settingIconContainer, { backgroundColor: theme.colors.primary[900] }]}>
-                  <HelpCircle size={20} color={theme.colors.primary[500]} />
+                  <Camera size={20} color={theme.colors.primary[500]} />
                 </View>
                 <Text style={[styles.settingLabel, { 
                   color: theme.colors.text.primary,
                   fontFamily: theme.fontFamily.medium
                 }]}>
-                  Help & Support
+                 Progress Photos
+                </Text>
+              </View>
+              <ChevronRight size={20} color={theme.colors.text.secondary} />
+            </TouchableOpacity>
+
+            <View style={[styles.settingDivider, { backgroundColor: theme.colors.dark[800] }]} />
+            
+            <TouchableOpacity style={styles.settingItem}>
+              <View style={styles.settingLeft}>
+                <View style={[styles.settingIconContainer, { backgroundColor: theme.colors.primary[900] }]}>
+                  <Footprints size={20} color={theme.colors.primary[500]} />
+                </View>
+                <Text style={[styles.settingLabel, { 
+                  color: theme.colors.text.primary,
+                  fontFamily: theme.fontFamily.medium
+                }]}>
+                  Steps
                 </Text>
               </View>
               <ChevronRight size={20} color={theme.colors.text.secondary} />
@@ -225,6 +300,45 @@ export default function ProfileScreen() {
           </View>
         </View>
         
+        {/* Progress Photos Section */}
+        <View style={styles.settingsSection}>
+          <View style={styles.sectionHeader}>
+            <Camera size={20} color={theme.colors.primary[500]} style={styles.sectionIcon} />
+            <Text style={[styles.sectionTitle, { 
+              color: theme.colors.text.primary,
+              fontFamily: theme.fontFamily.semiBold
+            }]}>
+              Progress Photos
+            </Text>
+          </View>
+          <View style={[styles.sectionCard, { backgroundColor: theme.colors.background.card }]}>
+            <ProgressPhotos userId={user?.id || ''} />
+          </View>
+        </View>
+
+        {/* Activity History Section */}
+        <View style={styles.settingsSection}>
+          <View style={styles.sectionHeader}>
+            <Activity size={20} color={theme.colors.primary[500]} style={styles.sectionIcon} />
+            <Text style={[styles.sectionTitle, { 
+              color: theme.colors.text.primary,
+              fontFamily: theme.fontFamily.semiBold
+            }]}>
+              Activity History
+            </Text>
+          </View>
+          <View style={[styles.sectionCard, { backgroundColor: theme.colors.background.card }]}>
+            {isLoading ? (
+              <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background.card }]}>
+                <Text style={{ color: theme.colors.text.secondary }}>Loading activities...</Text>
+              </View>
+            ) : (
+              <ActivityHistory activities={userActivities} />
+            )}
+          </View>
+        </View>
+
+        {/* Sign Out Button */}
         <TouchableOpacity 
           style={[styles.signOutButton, { backgroundColor: theme.colors.background.card }]}
           onPress={handleSignOut}
@@ -321,6 +435,26 @@ const styles = StyleSheet.create({
   },
   settingsSection: {
     marginBottom: 24,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  sectionIcon: {
+    marginRight: 8,
+  },
+  sectionCard: {
+    borderRadius: 12,
+    padding: 16,
+    overflow: 'hidden',
+  },
+  loadingContainer: {
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 100,
   },
   sectionTitle: {
     fontSize: 18,

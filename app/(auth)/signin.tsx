@@ -37,7 +37,7 @@ export default function SignInScreen() {
         />
         <View style={styles.overlay} />
         <Text style={[styles.appName, { color: theme.colors.white }]}>
-          FitTrack<Text style={{ color: theme.colors.primary[500] }}>Pro</Text>
+          StayFit<Text style={{ color: theme.colors.primary[500] }}>Pro</Text>
         </Text>
         <Text style={[styles.tagline, { color: theme.colors.text.secondary }]}>
           Your personal fitness journey starts here

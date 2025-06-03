@@ -1,7 +1,9 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { auth, getUserProfile, UserProfile, UserRole } from '@/utils/firebase';
-import { onAuthStateChanged, User } from 'firebase/auth';
+import { getUserProfile, UserProfile, UserRole } from '@/utils/supabase';
+import { supabase } from '@/utils/supabase';
 import { useRouter, useSegments } from 'expo-router';
+import { User, Session } from '@supabase/supabase-js';
+import { Alert } from 'react-native';
 
 // Auth context type
 interface AuthContextType {
@@ -48,7 +50,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     } else if (user && inAuthGroup) {
       // Check if user is approved before redirecting
       if (userProfile) {
-        if (!userProfile.isApproved && userProfile.role !== 'client') {
+        if (!userProfile.is_approved && userProfile.role !== 'client') {
           // Show pending approval message and redirect to sign in
           Alert.alert(
             'Account Pending Approval',
@@ -57,7 +59,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
               {
                 text: 'OK',
                 onPress: () => {
-                  signOut();
+                  handleSignOut();
                   router.replace('/(auth)/signin');
                 }
               }
@@ -86,28 +88,52 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   // Listen for auth state changes
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      setUser(firebaseUser);
-      
-      if (firebaseUser) {
-        // Get user profile from Firestore
-        const profile = await getUserProfile(firebaseUser.uid);
-        setUserProfile(profile);
-      } else {
-        setUserProfile(null);
+    // Set up Supabase auth listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        setUser(session?.user || null);
+        
+        if (session?.user) {
+          // Get user profile from Supabase
+          const profile = await getUserProfile(session.user.id);
+          setUserProfile(profile);
+        } else {
+          setUserProfile(null);
+        }
+        
+        setIsLoading(false);
       }
-      
-      setIsLoading(false);
-    });
+    );
 
-    return unsubscribe;
+    // Initial session check
+    const initializeAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        setUser(session.user);
+        const profile = await getUserProfile(session.user.id);
+        setUserProfile(profile);
+      }
+      setIsLoading(false);
+    };
+
+    initializeAuth();
+
+    // Cleanup subscription
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   // Auth methods
   const handleSignIn = async (email: string, password: string) => {
     try {
       setIsLoading(true);
-      await signIn(email, password);
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      
+      if (error) throw error;
     } catch (error) {
       console.error('Sign in error:', error);
       throw error;
@@ -124,10 +150,43 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   ) => {
     try {
       setIsLoading(true);
-      await signUp(email, password, displayName, role);
-    } catch (error) {
+      
+      // Sign up the user
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+      
+      if (authError) throw authError;
+      
+      if (authData.user) {
+        // Create user profile in the profiles table
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .insert({
+            id: authData.user.id,
+            email: email,
+            display_name: displayName,
+            role: role,
+            is_approved: role === 'client', // Auto-approve clients
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+          
+        if (profileError) throw profileError;
+      }
+    } catch (error: any) {
+      // Improved error handling with more detailed error information
       console.error('Sign up error:', error);
-      throw error;
+      
+      // Format the error message for better user feedback
+      const errorMessage = error.message || 
+                          (error.error_description || 
+                          (error.details || 'An unknown error occurred during sign up'));
+      
+      // Create a new error with a better message
+      const enhancedError = new Error(errorMessage);
+      throw enhancedError;
     } finally {
       setIsLoading(false);
     }
@@ -136,7 +195,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const handleSignOut = async () => {
     try {
       setIsLoading(true);
-      await signOut();
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
     } catch (error) {
       console.error('Sign out error:', error);
       throw error;
@@ -163,7 +223,3 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
 // Custom hook to use auth
 export const useAuth = () => useContext(AuthContext);
-
-// Import firebase functions
-import { signIn, signUp, signOut } from '@/utils/firebase';
-import { Alert } from 'react-native';

@@ -15,7 +15,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { ActivityIndicator } from 'react-native';
 import { Lock, Mail, User, ChevronDown } from 'lucide-react-native';
-import { UserRole } from '@/utils/firebase';
+import { UserRole } from '@/utils/supabase';
 
 const roles: { label: string; value: UserRole; description: string }[] = [
   {
@@ -78,7 +78,15 @@ export default function SignUpScreen() {
         );
       }
     } catch (error: any) {
-      Alert.alert('Sign Up Failed', error.message || 'An error occurred during sign up');
+      console.error('Signup screen error:', error);
+      // Extract error message from various possible error object structures
+      const errorMessage = 
+        (error.message) ? error.message : 
+        (error.error?.message) ? error.error.message :
+        (typeof error === 'string') ? error : 
+        'An unknown error occurred during sign up';
+      
+      Alert.alert('Sign Up Failed', errorMessage);
     }
   };
   
@@ -96,7 +104,7 @@ export default function SignUpScreen() {
         />
         <View style={styles.overlay} />
         <Text style={[styles.appName, { color: theme.colors.white }]}>
-          FitTrack<Text style={{ color: theme.colors.primary[500] }}>Pro</Text>
+          StayFit<Text style={{ color: theme.colors.primary[500] }}>Pro</Text>
         </Text>
         <Text style={[styles.tagline, { color: theme.colors.text.secondary }]}>
           Begin your fitness transformation today
