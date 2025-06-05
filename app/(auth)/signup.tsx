@@ -40,14 +40,29 @@ export default function SignUpScreen() {
   const router = useRouter();
   const theme = useTheme();
   
+  // Component-specific styles that need access to theme
+  const componentStyles = StyleSheet.create({
+    errorText: {
+      textAlign: 'center',
+      marginTop: 10, // Add some space above the error message
+      marginBottom: 10,
+      fontFamily: theme.fontFamily.regular,
+      color: theme.colors.error[500], 
+    },
+  });
+
+  
+  
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [selectedRole, setSelectedRole] = useState<UserRole>('client');
   const [showRoleSelector, setShowRoleSelector] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
   
   const handleSignUp = async () => {
+    setAuthError(null); // Clear previous errors
     if (!email || !password || !displayName) {
       Alert.alert('Error', 'Please fill in all fields');
       return;
@@ -86,7 +101,7 @@ export default function SignUpScreen() {
         (typeof error === 'string') ? error : 
         'An unknown error occurred during sign up';
       
-      Alert.alert('Sign Up Failed', errorMessage);
+      setAuthError(errorMessage);
     }
   };
   
@@ -256,6 +271,12 @@ export default function SignUpScreen() {
             </Text>
           )}
         </TouchableOpacity>
+
+        {authError && (
+          <Text style={[componentStyles.errorText]}>
+            {authError}
+          </Text>
+        )}
         
         <View style={styles.footer}>
           <Text style={[styles.footerText, { 

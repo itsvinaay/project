@@ -10,7 +10,7 @@ const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 // For operations that need to bypass RLS (like creating profiles during signup)
 // You'll need to create a service role key in your Supabase dashboard
 // WARNING: Keep this key secure and never expose it to clients
-const supabaseServiceKey = 'YOUR_SERVICE_ROLE_KEY'; // Replace with your actual service role key
+const supabaseServiceKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhtbnZ4Y2R5aXVyenptY3ZvYWFsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0ODg2OTIxMiwiZXhwIjoyMDY0NDQ1MjEyfQ.-Q4crg7q026QYRr4h5ZyjoMNC1jRgxFJmYo_WC7xHTg'; // Replace with your actual service role key
 
 // Create a single supabase client for interacting with your database
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
@@ -40,6 +40,12 @@ export interface UserProfile {
   approved_by?: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface DashboardStats {
+  totalUsers: number;
+  totalTrainers: number;
+  totalNutritionists: number;
 }
 
 // Auth functions
@@ -181,17 +187,21 @@ export const getUserProfile = async (userId: string): Promise<UserProfile | null
     
     // Try with RPC function if direct query fails
     const { data: rpcData, error: rpcError } = await supabase
-      .rpc('get_profile_by_id', { user_id: userId });
+      .rpc('get_profile_bypass_rls', { p_user_id: userId });
       
     if (!rpcError && rpcData) {
-      console.log('Successfully fetched profile with RPC function');
-      return rpcData as UserProfile;
+      console.log('Successfully fetched profile with RPC function, raw rpcData:', JSON.stringify(rpcData, null, 2));
+      // If rpcData is an array, take the first element, otherwise use it directly
+      const profileData = Array.isArray(rpcData) ? rpcData[0] : rpcData;
+      if (profileData) {
+        return profileData as UserProfile;
+      }
     }
     
     console.error('RPC function failed:', rpcError);
     
     // If we have a service role key, try with admin client
-    if (supabaseServiceKey && supabaseServiceKey !== 'YOUR_SERVICE_ROLE_KEY') {
+    if (supabaseServiceKey && supabaseServiceKey !== 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhtbnZ4Y2R5aXVyenptY3ZvYWFsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0ODg2OTIxMiwiZXhwIjoyMDY0NDQ1MjEyfQ.-Q4crg7q026QYRr4h5ZyjoMNC1jRgxFJmYo_WC7xHTg') {
       console.log('Trying with admin client...');
       const { data: adminData, error: adminError } = await supabaseAdmin
         .from('profiles')
@@ -242,40 +252,74 @@ export const updateUserProfile = async (userId: string, data: Partial<UserProfil
   if (error) throw error;
 };
 
-export const getPendingApprovalUsers = async () => {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('is_approved', false);
+export const getPendingApprovalUsers = async (): Promise<UserProfile[]> => {
+  console.log('[Supabase] Fetching pending approval users...');
+  try {
+    console.log('[Supabase] Using supabaseAdmin client');
     
-  if (error) throw error;
-  return data as UserProfile[];
+    const { data, error, status, count } = await supabaseAdmin
+      .from('profiles')
+      .select('*', { count: 'exact' })
+      .eq('is_approved', false)
+      .in('role', ['trainer', 'nutritionist']);
+
+    console.log('[Supabase] Query completed with status:', status);
+    console.log('[Supabase] Raw response data:', JSON.stringify(data, null, 2));
+    console.log('[Supabase] Total count of pending users:', count);
+    
+    if (error) {
+      console.error('[Supabase] Error details:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      });
+      throw error;
+    }
+
+    console.log(`[Supabase] Successfully fetched ${data?.length || 0} pending users`);
+    return data || [];
+  } catch (error) {
+    console.error('[Supabase] Unexpected error in getPendingApprovalUsers:', error);
+    throw error;
+  }
 };
 
-export const approveUser = async (userId: string, adminId: string) => {
-  const { error } = await supabase
+export const approveUser = async (userId: string, adminId: string): Promise<UserProfile | null> => {
+  console.log(`[SupabaseAdmin] Approving user ${userId} by admin ${adminId}`);
+  const { data, error } = await supabaseAdmin
     .from('profiles')
     .update({
       is_approved: true,
       approved_at: new Date().toISOString(),
       approved_by: adminId,
-      updated_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(), // Also update updated_at
     })
-    .eq('id', userId);
-    
-  if (error) throw error;
+    .eq('id', userId)
+    .select()
+    .single(); // Expect a single profile back
+
+  if (error) {
+    console.error('[SupabaseAdmin] Error approving user:', error);
+    throw error;
+  }
+  console.log('[SupabaseAdmin] User approved:', data);
+  return data;
 };
 
-export const rejectUser = async (userId: string) => {
-  const { error } = await supabase
+export const rejectUser = async (userId: string): Promise<void> => {
+  console.log(`[SupabaseAdmin] Rejecting (deleting) user profile ${userId}`);
+  // Correctly await the full Supabase operation before destructuring
+  const { error } = await supabaseAdmin
     .from('profiles')
-    .update({
-      is_approved: false,
-      updated_at: new Date().toISOString(),
-    })
+    .delete()
     .eq('id', userId);
-    
-  if (error) throw error;
+
+  if (error) {
+    console.error('[SupabaseAdmin] Error rejecting user profile:', error);
+    throw error;
+  }
+  console.log('[SupabaseAdmin] User profile rejected (deleted) successfully.');
 };
 
 export interface ActivityLog {
@@ -481,5 +525,178 @@ export const getProgressPhotos = async (userId: string): Promise<ProgressPhoto[]
   } catch (error) {
     console.error('Error in getProgressPhotos:', error);
     throw error;
+  }
+};
+
+/**
+ * Fetches all users with pagination and filtering
+ * @param page Page number (1-based)
+ * @param pageSize Number of users per page
+ * @param searchQuery Optional search query to filter users by name or email
+ * @param role Optional role to filter users by
+ */
+export const getAllUsers = async (
+  page: number = 1,
+  pageSize: number = 10,
+  searchQuery: string = '',
+  role?: string
+): Promise<{ users: UserProfile[], total: number }> => {
+  console.log('[getAllUsers] Starting with params:', { page, pageSize, searchQuery, role });
+  
+  try {
+    if (!supabaseAdmin) {
+      throw new Error('Supabase client is not initialized');
+    }
+
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+    
+    console.log('[getAllUsers] Building query...');
+    
+    // Initialize the base query
+    let query = supabaseAdmin
+      .from('profiles')
+      .select('*', { count: 'exact' });
+
+    // Apply ordering
+    query = query.order('created_at', { ascending: false });
+    
+    // Apply pagination only if pageSize is greater than 0
+    if (pageSize > 0) {
+      query = query.range(from, to);
+    }
+    
+    // Apply search filter if provided
+    if (searchQuery && searchQuery.trim() !== '') {
+      console.log('[getAllUsers] Applying search filter:', searchQuery);
+      query = query.or(`display_name.ilike.%${searchQuery.trim()}%,email.ilike.%${searchQuery.trim()}%`);
+    }
+    
+    // Apply role filter if provided
+    if (role && role.trim() !== '') {
+      console.log('[getAllUsers] Applying role filter:', role);
+      query = query.eq('role', role.trim());
+    }
+    
+    console.log('[getAllUsers] Executing query...');
+    const { data, error, count } = await query;
+    
+    if (error) {
+      console.error('[getAllUsers] Error from Supabase:', error);
+      throw error;
+    }
+    
+    console.log(`[getAllUsers] Query successful. Found ${data?.length || 0} users (total: ${count || 0})`);
+    
+    // Ensure we always return an array, even if data is null/undefined
+    const users = Array.isArray(data) ? data : [];
+    
+    return {
+      users,
+      total: count || 0
+    };
+  } catch (error) {
+    console.error('Failed to fetch users:', error);
+    throw error;
+  }
+};
+
+/**
+ * Updates a user's role
+ * @param userId The ID of the user to update
+ * @param role The new role
+ * @param adminId The ID of the admin making the change
+ */
+export const updateUserRole = async (
+  userId: string,
+  role: UserRole,
+  adminId: string
+): Promise<UserProfile | null> => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('profiles')
+      .update({ 
+        role,
+        updated_at: new Date().toISOString(),
+        approved_by: adminId,
+        is_approved: true
+      })
+      .eq('id', userId)
+      .select()
+      .single();
+      
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Error updating user role:', error);
+    throw error;
+  }
+};
+
+/**
+ * Deactivates a user
+ * @param userId The ID of the user to deactivate
+ */
+export const deactivateUser = async (userId: string): Promise<boolean> => {
+  try {
+    const { error } = await supabaseAdmin
+      .from('profiles')
+      .update({ 
+        is_active: false,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId);
+      
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error deactivating user:', error);
+    throw error;
+  }
+};
+
+export const getDashboardStats = async (): Promise<DashboardStats> => {
+  console.log('[SupabaseAdmin] Fetching dashboard stats...');
+  try {
+    const { count: totalUsers, error: usersError } = await supabaseAdmin
+      .from('profiles')
+      .select('*', { count: 'exact', head: true });
+
+    if (usersError) {
+      console.error('[SupabaseAdmin] Error fetching total users count:', usersError);
+      throw usersError;
+    }
+
+    const { count: totalTrainers, error: trainersError } = await supabaseAdmin
+      .from('profiles')
+      .select('*', { count: 'exact', head: true })
+      .eq('role', 'trainer');
+
+    if (trainersError) {
+      console.error('[SupabaseAdmin] Error fetching total trainers count:', trainersError);
+      throw trainersError;
+    }
+
+    const { count: totalNutritionists, error: nutritionistsError } = await supabaseAdmin
+      .from('profiles')
+      .select('*', { count: 'exact', head: true })
+      .eq('role', 'nutritionist');
+
+    if (nutritionistsError) {
+      console.error('[SupabaseAdmin] Error fetching total nutritionists count:', nutritionistsError);
+      throw nutritionistsError;
+    }
+    
+    const stats: DashboardStats = {
+      totalUsers: totalUsers ?? 0,
+      totalTrainers: totalTrainers ?? 0,
+      totalNutritionists: totalNutritionists ?? 0,
+    };
+    console.log('[SupabaseAdmin] Dashboard stats fetched:', stats);
+    return stats;
+
+  } catch (error) {
+    console.error('[SupabaseAdmin] Error in getDashboardStats:', error);
+    throw new Error('Failed to fetch dashboard statistics.');
   }
 };

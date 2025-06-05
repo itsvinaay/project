@@ -11,21 +11,66 @@ import {
   Switch
 } from 'react-native';
 import { useTheme } from '@/context/ThemeContext';
+import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { User, Settings, LogOut, Bell, Shield, CircleHelp as HelpCircle, ChevronRight, Moon, Activity, Camera, Dumbbell, Footprints } from 'lucide-react-native';
 import { getActivityLogs } from '@/utils/supabase';
 import ActivityHistory from '@/components/ActivityHistory';
 import ProgressPhotos from '@/components/ProgressPhotos';
+import ProfileWeightMetrics from '@/components/ProfileWeightMetrics';
+import { getMetricEntries, MetricEntry } from '@/services/metricDataService';
 
 export default function ProfileScreen() {
   const theme = useTheme();
+  const router = useRouter();
   const { user, userProfile, signOut } = useAuth();
   
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [darkModeEnabled, setDarkModeEnabled] = useState(true);
   const [userActivities, setUserActivities] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [weightEntries, setWeightEntries] = useState<MetricEntry[]>([]);
+  const [weightData, setWeightData] = useState<number[]>([]);
+  const [weightDates, setWeightDates] = useState<string[]>([]);
 
+  // Fetch weight metrics data
+  useEffect(() => {
+    const fetchWeightData = () => {
+      const entries = getMetricEntries('weight');
+      setWeightEntries(entries);
+      
+      if (entries.length > 0) {
+        // Sort entries by date (oldest to newest) for proper chart display
+        const sortedEntries = [...entries].sort((a, b) => {
+          return new Date(a.date).getTime() - new Date(b.date).getTime();
+        });
+        
+        // Extract values and dates for the chart
+        const values = sortedEntries.map(entry => parseFloat(entry.value));
+        
+        // Format dates more clearly for the chart
+        const dates = sortedEntries.map(entry => {
+          const date = new Date(entry.date);
+          const month = date.toLocaleString('default', { month: 'short' });
+          return `${month} ${date.getDate()}`;
+        });
+        
+        setWeightData(values);
+        setWeightDates(dates);
+      } else {
+        // Set default empty arrays if no data
+        setWeightData([]);
+        setWeightDates([]);
+      }
+    };
+    
+    fetchWeightData();
+    
+    // Set up interval to refresh weight data
+    const weightInterval = setInterval(fetchWeightData, 2000);
+    return () => clearInterval(weightInterval);
+  }, []);
+  
   // Fetch user activities
   useEffect(() => {
     const fetchActivities = async () => {
@@ -166,37 +211,32 @@ export default function ProfileScreen() {
           </View>
         </View>
         
-        {/* Weight Metrics Section */}
-        <View style={styles.settingsSection}>
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { 
+        {/* Metrics Section */}
+        <View style={styles.metricsSection}>
+          <View style={styles.metricsSectionHeader}>
+            <Text style={[styles.metricsSectionTitle, { 
               color: theme.colors.text.primary,
               fontFamily: theme.fontFamily.semiBold
             }]}>
-              Weight Metrics
+              Metrics
             </Text>
-            <TouchableOpacity>
-              <Text style={[styles.viewMoreText, { color: theme.colors.primary[500] }]}>
-                View More
+            <TouchableOpacity onPress={() => router.push('/(metrics)')}>
+              <Text style={[styles.viewMoreText, { 
+                color: theme.colors.primary[500],
+                fontFamily: theme.fontFamily.medium
+              }]}>
+                View more
               </Text>
             </TouchableOpacity>
           </View>
           
           <View style={[styles.metricsCard, { backgroundColor: theme.colors.background.card }]}>
-            <View style={styles.metricItem}>
-              <Text style={[styles.metricValue, { color: theme.colors.primary[500] }]}>72.5 kg</Text>
-              <Text style={[styles.metricLabel, { color: theme.colors.text.secondary }]}>Current Weight</Text>
-            </View>
-            <View style={[styles.metricDivider, { backgroundColor: theme.colors.dark[700] }]} />
-            <View style={styles.metricItem}>
-              <Text style={[styles.metricValue, { color: theme.colors.success }]}>-2.3 kg</Text>
-              <Text style={[styles.metricLabel, { color: theme.colors.text.secondary }]}>This Month</Text>
-            </View>
-            <View style={[styles.metricDivider, { backgroundColor: theme.colors.dark[700] }]} />
-            <View style={styles.metricItem}>
-              <Text style={[styles.metricValue, { color: theme.colors.text.primary }]}>70.2 kg</Text>
-              <Text style={[styles.metricLabel, { color: theme.colors.text.secondary }]}>Target Weight</Text>
-            </View>
+            <ProfileWeightMetrics 
+              weightData={weightData.length > 0 ? weightData : [0]}
+              dates={weightDates.length > 0 ? weightDates : ['Today']}
+              unit={weightEntries.length > 0 ? weightEntries[0].unit : 'KG'}
+              isLoading={isLoading}
+            />
           </View>
         </View>
 
@@ -488,6 +528,28 @@ const styles = StyleSheet.create({
   settingDivider: {
     height: 1,
     width: '100%',
+  },
+  // Metrics section styles
+  metricsSection: {
+    marginBottom: 24,
+  },
+  metricsSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
+  metricsSectionTitle: {
+    fontSize: 20,
+  },
+  viewMoreText: {
+    fontSize: 14,
+  },
+  metricsCard: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 8,
   },
   signOutButton: {
     flexDirection: 'row',

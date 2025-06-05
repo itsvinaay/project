@@ -7,16 +7,31 @@ import { ActivityIndicator } from 'react-native';
 import { Lock, Mail } from 'lucide-react-native';
 
 export default function SignInScreen() {
-  const { signIn, isLoading } = useAuth();
+  const { signIn, isLoading, resendConfirmationEmail } = useAuth();
   const router = useRouter();
   const theme = useTheme();
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [showResendButton, setShowResendButton] = useState<boolean>(false);
+  const [resendStatus, setResendStatus] = useState<string | null>(null);
+
+  const componentStyles = StyleSheet.create({
+    errorText: {
+      textAlign: 'center',
+      marginBottom: 10,
+      fontFamily: theme.fontFamily.regular,
+      color: theme.colors.error[500], // Use error color from theme
+    },
+  });
   
   const handleSignIn = async () => {
+    setAuthError(null); // Clear previous errors
+    setShowResendButton(false); // Reset resend button visibility
+    setResendStatus(null); // Clear previous resend status
     if (!email || !password) {
-      Alert.alert('Error', 'Please enter both email and password');
+      setAuthError('Please enter both email and password');
       return;
     }
     
@@ -24,7 +39,31 @@ export default function SignInScreen() {
       await signIn(email, password);
       // Navigation is handled in AuthContext
     } catch (error: any) {
-      Alert.alert('Sign In Failed', error.message || 'Please check your credentials');
+      const errorMessage = error.message || 'Sign In Failed. Please check your credentials';
+      setAuthError(errorMessage);
+      if (errorMessage.includes('Email not confirmed')) {
+        setShowResendButton(true);
+      }
+    }
+  };
+
+  const handleResendEmail = async () => {
+    if (!email) {
+      setResendStatus('Please enter your email address first.');
+      return;
+    }
+    setResendStatus('Sending...');
+    try {
+      await resendConfirmationEmail(email);
+      setResendStatus('Confirmation email resent! Please check your inbox (and spam folder).');
+      setShowResendButton(false); // Optionally hide button after successful resend
+    } catch (error: any) {
+      if (error.message.includes('Email already confirmed')) {
+        setResendStatus('This email address has already been confirmed.');
+      } else {
+        setResendStatus(error.message || 'Failed to resend confirmation email.');
+      }
+      console.error('Resend email error:', error);
     }
   };
   
@@ -84,6 +123,30 @@ export default function SignInScreen() {
             secureTextEntry
           />
         </View>
+
+        {authError && (
+          <Text style={componentStyles.errorText}>
+            {authError}
+          </Text>
+        )}
+
+        {showResendButton && (
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: theme.colors.secondary[500], marginTop: 10 }]} // Use a different color for distinction
+            onPress={handleResendEmail}
+            disabled={isLoading} // Can use isLoading or a new state for resend loading
+          >
+            <Text style={[styles.buttonText, { color: theme.colors.white }]}>
+              Resend Confirmation Email
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        {resendStatus && (
+          <Text style={[componentStyles.errorText, { marginTop: 10, color: resendStatus.includes('Failed') || resendStatus.includes('Please enter') ? theme.colors.error[500] : theme.colors.success[500] }]}>
+            {resendStatus}
+          </Text>
+        )}
         
         <TouchableOpacity
           style={[styles.button, { backgroundColor: theme.colors.primary[500] }]}

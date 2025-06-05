@@ -13,6 +13,7 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, displayName: string, role?: UserRole) => Promise<void>;
   signOut: () => Promise<void>;
+  resendConfirmationEmail: (email: string) => Promise<void>;
 }
 
 // Create context
@@ -23,6 +24,7 @@ const AuthContext = createContext<AuthContextType>({
   signIn: async () => {},
   signUp: async () => {},
   signOut: async () => {},
+  resendConfirmationEmail: async (email: string) => {},
 });
 
 // Auth provider props
@@ -68,16 +70,24 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         } else {
           // Redirect to appropriate dashboard based on role
           switch (userProfile.role) {
-            case 'admin':
-              router.replace('/(admin)');
+            case 'client':
+              console.log('[AuthContext] Routing client to /tabs');
+              router.replace('/(tabs)');
               break;
             case 'trainer':
-              router.replace('/(trainer)');
+              console.log('[AuthContext] Routing trainer to /trainer/dashboard');
+              router.replace('/(trainer)/dashboard');
               break;
             case 'nutritionist':
-              router.replace('/(nutritionist)');
+              console.log('[AuthContext] Routing nutritionist to /nutritionist/dashboard');
+              router.replace('/(nutritionist)/dashboard');
+              break;
+            case 'admin':
+              console.log('[AuthContext] Routing admin to /admin/dashboard');
+              router.replace('/(admin)/dashboard');
               break;
             default:
+              console.log(`[AuthContext] Unknown role: ${userProfile.role}, routing to /tabs`);
               router.replace('/(tabs)');
               break;
           }
@@ -96,6 +106,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         if (session?.user) {
           // Get user profile from Supabase
           const profile = await getUserProfile(session.user.id);
+          console.log('[AuthContext] onAuthStateChange - Fetched profile:', JSON.stringify(profile, null, 2));
           setUserProfile(profile);
         } else {
           setUserProfile(null);
@@ -111,6 +122,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       if (session) {
         setUser(session.user);
         const profile = await getUserProfile(session.user.id);
+        console.log('[AuthContext] initializeAuth - Fetched profile:', JSON.stringify(profile, null, 2));
         setUserProfile(profile);
       }
       setIsLoading(false);
@@ -160,6 +172,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       if (authError) throw authError;
       
       if (authData.user) {
+        const isClient = role === 'client';
+        console.log(`[AuthContext] handleSignUp: Creating profile for user ${authData.user.id} with role: ${role}, calculated is_approved: ${isClient}`);
+
         // Create user profile in the profiles table
         const { error: profileError } = await supabase
           .from('profiles')
@@ -168,7 +183,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             email: email,
             display_name: displayName,
             role: role,
-            is_approved: role === 'client', // Auto-approve clients
+            is_approved: isClient, // Auto-approve clients
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           });
@@ -205,6 +220,24 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   };
 
+  const handleResendConfirmationEmail = async (email: string) => {
+    try {
+      const { error } = await supabase.auth.resend({ 
+        type: 'signup', 
+        email: email 
+      });
+      if (error) {
+        if (error.message.includes('Email already confirmed')) {
+          console.warn('Resend confirmation email: Email already confirmed.', error);
+        }
+        throw error;
+      }
+    } catch (error) {
+      console.error('Resend confirmation email error:', error);
+      throw error;
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -214,6 +247,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         signIn: handleSignIn,
         signUp: handleSignUp,
         signOut: handleSignOut,
+        resendConfirmationEmail: handleResendConfirmationEmail,
       }}
     >
       {children}

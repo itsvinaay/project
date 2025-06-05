@@ -7,6 +7,7 @@ import StepCard from '@/components/StepCard';
 import SleepCard from '@/components/SleepCard';
 import WaterCard from '@/components/WaterCard';
 import HeartRateCard from '@/components/HeartRateCard';
+import WeightMetricsCard from '@/components/WeightMetricsCard';
 import WalkMap from '@/components/WalkMap';
 import { Bell } from 'lucide-react-native';
 import dayjs from 'dayjs';
@@ -35,6 +36,10 @@ const SAMPLE_DATA = {
   water: {
     goal: 8,
     current: 5,
+  },
+  weight: {
+    data: [60, 59.5, 58.7, 57.2, 56.5, 52.5, 58.5],
+    dates: ['4/5', '4/17', '4/29', '5/11', '5/23', '6/3', '6/3'],
   },
   recentWalk: {
     route: [
@@ -181,6 +186,13 @@ export default function DashboardScreen() {
           times={SAMPLE_DATA.heartRate.times}
           currentRate={SAMPLE_DATA.heartRate.current}
           restingRate={SAMPLE_DATA.heartRate.resting}
+          isLoading={isLoading}
+        />
+        
+        <WeightMetricsCard
+          weightData={SAMPLE_DATA.weight.data}
+          dates={SAMPLE_DATA.weight.dates}
+          unit="KG"
           isLoading={isLoading}
         />
         

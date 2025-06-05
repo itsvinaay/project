@@ -18,11 +18,18 @@ import {
   ChevronRight 
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
+import { getPendingApprovalUsers, approveUser, rejectUser, UserProfile, getDashboardStats, DashboardStats } from '@/utils/supabase';
+import { Alert, ActivityIndicator } from 'react-native';
 
 export default function AdminDashboardScreen() {
   const theme = useTheme();
   const { userProfile, signOut } = useAuth();
   const router = useRouter();
+  const [pendingUsers, setPendingUsers] = React.useState<UserProfile[]>([]);
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+  const [dashboardStats, setDashboardStats] = React.useState<DashboardStats | null>(null);
+  const [isStatsLoading, setIsStatsLoading] = React.useState(true);
   
   // Handle sign out
   const handleSignOut = async () => {
@@ -32,6 +39,86 @@ export default function AdminDashboardScreen() {
     } catch (error) {
       console.error('Error signing out:', error);
     }
+  };
+
+  const fetchPendingUsers = async () => {
+    console.log('[AdminDashboard] fetchPendingUsers called');
+    try {
+      console.log('[AdminDashboard] Calling getPendingApprovalUsers...');
+      const users = await getPendingApprovalUsers();
+      console.log('[AdminDashboard] Fetched pending users:', JSON.stringify(users, null, 2));
+      setPendingUsers(users);
+      setError(null);
+      return users; // Return the users for the .then() chain
+    } catch (err) {
+      console.error('[AdminDashboard] Failed to fetch pending users:', err);
+      setError('Failed to fetch pending users');
+      throw err; // Re-throw to be caught by the .catch()
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    console.log('[AdminDashboard] useEffect triggered. UserProfile:', JSON.stringify(userProfile, null, 2)); // Log entire profile for inspection
+    if (userProfile?.role === 'admin') {
+      console.log('[AdminDashboard] User is admin, fetching data...');
+      fetchPendingUsers().then(() => console.log('[AdminDashboard] Fetched pending users.'));
+      fetchDashboardData().then(() => console.log('[AdminDashboard] Fetched dashboard stats.'));
+    } else {
+      console.log('[AdminDashboard] User is NOT admin or profile not loaded. Current role:', userProfile?.role);
+    }
+  }, [userProfile]);
+
+  const fetchDashboardData = async () => {
+    try {
+      setIsStatsLoading(true);
+      const stats = await getDashboardStats();
+      setDashboardStats(stats);
+    } catch (e: any) {
+      console.error('Failed to fetch dashboard stats:', e);
+      // Optionally set an error state for stats specifically
+      Alert.alert('Error', e.message || 'Failed to load dashboard statistics.');
+    } finally {
+      setIsStatsLoading(false);
+    }
+  };
+
+  const handleApprove = async (userIdToApprove: string) => {
+    if (!userProfile?.id) {
+      Alert.alert('Error', 'Admin user ID not found.');
+      return;
+    }
+    try {
+      await approveUser(userIdToApprove, userProfile.id);
+      Alert.alert('Success', 'User approved.');
+      fetchPendingUsers(); // Refresh list
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to approve user.');
+    }
+  };
+
+  const handleReject = async (userIdToReject: string) => {
+    Alert.alert(
+      'Confirm Rejection',
+      'Are you sure you want to reject and delete this user profile?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reject & Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await rejectUser(userIdToReject);
+              Alert.alert('Success', 'User rejected and profile deleted.');
+              fetchPendingUsers(); // Refresh list
+            } catch (e: any) {
+              Alert.alert('Error', e.message || 'Failed to reject user.');
+            }
+          },
+        },
+      ]
+    );
   };
   
   return (
@@ -66,7 +153,7 @@ export default function AdminDashboardScreen() {
               color: theme.colors.text.primary,
               fontFamily: theme.fontFamily.semiBold
             }]}>
-              152
+              {isStatsLoading ? '...' : dashboardStats?.totalUsers ?? '0'}
             </Text>
             <Text style={[styles.statLabel, { 
               color: theme.colors.text.secondary,
@@ -84,7 +171,7 @@ export default function AdminDashboardScreen() {
               color: theme.colors.text.primary,
               fontFamily: theme.fontFamily.semiBold
             }]}>
-              12
+              {isStatsLoading ? '...' : dashboardStats?.totalTrainers ?? '0'}
             </Text>
             <Text style={[styles.statLabel, { 
               color: theme.colors.text.secondary,
@@ -102,7 +189,7 @@ export default function AdminDashboardScreen() {
               color: theme.colors.text.primary,
               fontFamily: theme.fontFamily.semiBold
             }]}>
-              8
+              {isStatsLoading ? '...' : dashboardStats?.totalNutritionists ?? '0'}
             </Text>
             <Text style={[styles.statLabel, { 
               color: theme.colors.text.secondary,
@@ -121,83 +208,81 @@ export default function AdminDashboardScreen() {
             Pending Applications
           </Text>
           
-          <View style={[styles.pendingCard, { backgroundColor: theme.colors.background.card }]}>
-            <View style={styles.pendingItem}>
-              <View style={styles.pendingInfo}>
-                <Text style={[styles.pendingName, { 
-                  color: theme.colors.text.primary,
-                  fontFamily: theme.fontFamily.medium
-                }]}>
-                  John Smith
-                </Text>
-                <Text style={[styles.pendingRole, { 
-                  color: theme.colors.text.secondary,
-                  fontFamily: theme.fontFamily.regular
-                }]}>
-                  Trainer Application
-                </Text>
-              </View>
-              
-              <View style={styles.pendingActions}>
-                <TouchableOpacity style={[styles.actionButton, styles.approveButton, { backgroundColor: theme.colors.success[500] }]}>
-                  <Text style={[styles.actionButtonText, { 
-                    color: theme.colors.white,
-                    fontFamily: theme.fontFamily.medium
-                  }]}>
-                    Approve
-                  </Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity style={[styles.actionButton, styles.rejectButton, { backgroundColor: theme.colors.error[500] }]}>
-                  <Text style={[styles.actionButtonText, { 
-                    color: theme.colors.white,
-                    fontFamily: theme.fontFamily.medium
-                  }]}>
-                    Decline
-                  </Text>
-                </TouchableOpacity>
-              </View>
+          {isLoading ? (
+            <View style={{ padding: 20, alignItems: 'center' }}>
+              <ActivityIndicator size="small" color={theme.colors.primary[500]} />
+              <Text style={{ marginTop: 10, color: theme.colors.text.secondary }}>Loading pending applications...</Text>
             </View>
-            
-            <View style={[styles.pendingDivider, { backgroundColor: theme.colors.dark[800] }]} />
-            
-            <View style={styles.pendingItem}>
-              <View style={styles.pendingInfo}>
-                <Text style={[styles.pendingName, { 
-                  color: theme.colors.text.primary,
-                  fontFamily: theme.fontFamily.medium
-                }]}>
-                  Emma Wilson
-                </Text>
-                <Text style={[styles.pendingRole, { 
-                  color: theme.colors.text.secondary,
-                  fontFamily: theme.fontFamily.regular
-                }]}>
-                  Nutritionist Application
-                </Text>
-              </View>
-              
-              <View style={styles.pendingActions}>
-                <TouchableOpacity style={[styles.actionButton, styles.approveButton, { backgroundColor: theme.colors.success[500] }]}>
-                  <Text style={[styles.actionButtonText, { 
-                    color: theme.colors.white,
-                    fontFamily: theme.fontFamily.medium
-                  }]}>
-                    Approve
-                  </Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity style={[styles.actionButton, styles.rejectButton, { backgroundColor: theme.colors.error[500] }]}>
-                  <Text style={[styles.actionButtonText, { 
-                    color: theme.colors.white,
-                    fontFamily: theme.fontFamily.medium
-                  }]}>
-                    Decline
-                  </Text>
-                </TouchableOpacity>
-              </View>
+          ) : error ? (
+            <View style={{ padding: 20, alignItems: 'center' }}>
+              <Text style={{ color: theme.colors.error[500] }}>{error}</Text>
+              <TouchableOpacity 
+                onPress={fetchPendingUsers}
+                style={{ 
+                  marginTop: 10, 
+                  padding: 10, 
+                  backgroundColor: theme.colors.primary[500],
+                  borderRadius: 8
+                }}
+              >
+                <Text style={{ color: 'white' }}>Retry</Text>
+              </TouchableOpacity>
             </View>
-          </View>
+          ) : pendingUsers.length === 0 ? (
+            <View style={{ padding: 20, alignItems: 'center' }}>
+              <Text style={{ color: theme.colors.text.secondary }}>No pending applications.</Text>
+            </View>
+          ) : (
+            <View style={[styles.pendingCard, { backgroundColor: theme.colors.background.card }]}>
+              {pendingUsers.map((user, index) => (
+                <View key={user.id}>
+                  {index > 0 && <View style={[styles.pendingDivider, { backgroundColor: theme.colors.dark[800] }]} />}
+                  <View style={styles.pendingItem}>
+                    <View style={styles.pendingInfo}>
+                      <Text style={[styles.pendingName, { 
+                        color: theme.colors.text.primary,
+                        fontFamily: theme.fontFamily.medium
+                      }]}>
+                        {user.full_name || 'No Name'}
+                      </Text>
+                      <Text style={[styles.pendingRole, { 
+                        color: theme.colors.text.secondary,
+                        fontFamily: theme.fontFamily.regular
+                      }]}>
+                        {user.role === 'trainer' ? 'Trainer' : 'Nutritionist'} Application
+                      </Text>
+                    </View>
+                    
+                    <View style={styles.pendingActions}>
+                      <TouchableOpacity 
+                        style={[styles.actionButton, styles.approveButton, { backgroundColor: theme.colors.success[500] }]}
+                        onPress={() => handleApprove(user.id)}
+                      >
+                        <Text style={[styles.actionButtonText, { 
+                          color: theme.colors.white,
+                          fontFamily: theme.fontFamily.medium
+                        }]}>
+                          Approve
+                        </Text>
+                      </TouchableOpacity>
+                      
+                      <TouchableOpacity 
+                        style={[styles.actionButton, styles.rejectButton, { backgroundColor: theme.colors.error[500] }]}
+                        onPress={() => handleReject(user.id)}
+                      >
+                        <Text style={[styles.actionButtonText, { 
+                          color: theme.colors.white,
+                          fontFamily: theme.fontFamily.medium
+                        }]}>
+                          Decline
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
         </View>
         
         <View style={styles.section}>
@@ -209,7 +294,10 @@ export default function AdminDashboardScreen() {
           </Text>
           
           <View style={[styles.actionsCard, { backgroundColor: theme.colors.background.card }]}>
-            <TouchableOpacity style={styles.actionItem}>
+            <TouchableOpacity 
+              style={styles.actionItem}
+              onPress={() => router.push('/(admin)/manage-users')}
+            >
               <View style={styles.actionLeft}>
                 <View style={[styles.actionIconContainer, { backgroundColor: theme.colors.primary[900] }]}>
                   <Users size={20} color={theme.colors.primary[500]} />

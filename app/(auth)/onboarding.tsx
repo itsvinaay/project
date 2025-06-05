@@ -97,15 +97,42 @@ export default function OnboardingScreen() {
   };
 
   const handleComplete = async () => {
-    if (!user) return;
+    if (!user) {
+      console.error('Onboarding: No user found before attempting to complete.');
+      // Optionally, redirect to sign-in or show an error
+      // router.replace('/(auth)/signin'); 
+      return;
+    }
     
     setIsLoading(true);
     try {
+      // Attempt to get the current user to ensure the session is valid
+      const { data: { user: currentUser }, error: sessionError } = await supabase.auth.getUser();
+      
+      if (sessionError || !currentUser) {
+        console.error('Onboarding: Session error or no current user from Supabase:', sessionError);
+        // Handle invalid session, e.g., sign out and redirect
+        // It's possible useAuth() needs to be called here if not available in this scope
+        // await signOut(); // Assuming signOut is available from useAuth()
+        router.replace('/(auth)/signin'); // Or show an error message
+        setIsLoading(false);
+        return;
+      }
+
+      // Ensure the user ID for the health profile matches the currently authenticated user
+      if (currentUser.id !== user.id) {
+        console.error('Onboarding: Mismatch between context user and current session user.');
+        router.replace('/(auth)/signin'); // Or handle as a critical error
+        setIsLoading(false);
+        return;
+      }
+
       // Save user health data to Supabase
       const { error } = await supabase
         .from('health_profiles')
         .upsert({
-          user_id: user.id,
+          user_id: currentUser.id, // Use ID from the refreshed session user
+          
           age: parseInt(age),
           weight: parseFloat(weight),
           height: parseFloat(height),

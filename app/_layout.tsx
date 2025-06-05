@@ -57,6 +57,7 @@ export default function RootLayout() {
           <Stack.Screen name="(admin)" options={{ headerShown: false }} />
           <Stack.Screen name="(trainer)" options={{ headerShown: false }} />
           <Stack.Screen name="(nutritionist)" options={{ headerShown: false }} />
+          <Stack.Screen name="(metrics)" options={{ headerShown: false }} />
         </Stack>
       </ThemeProvider>
     </AuthProvider>
