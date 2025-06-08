@@ -14,12 +14,16 @@ interface DateSelectorProps {
   onDateSelect: (date: Date) => void;
   initialDate?: Date;
   numberOfDays?: number;
+  initialMarkedDates?: Set<string>;
+  onMarkedDatesChange?: (markedDates: Set<string>) => void;
 }
 
 export default function DateSelector({ 
   onDateSelect, 
   initialDate = new Date(), 
-  numberOfDays = 14 
+  numberOfDays = 14,
+  initialMarkedDates = new Set<string>(),
+  onMarkedDatesChange
 }: DateSelectorProps) {
   const theme = useTheme();
   const flatListRef = useRef<FlatList>(null);
@@ -39,6 +43,7 @@ export default function DateSelector({
   
   const [dates] = useState(generateDates());
   const [selectedDate, setSelectedDate] = useState(initialDate);
+  const [markedDates, setMarkedDates] = useState<Set<string>>(initialMarkedDates);
   
   // Format date for display
   const formatDate = (date: Date) => {
@@ -54,6 +59,28 @@ export default function DateSelector({
   const handleDateSelect = (date: Date) => {
     setSelectedDate(date);
     onDateSelect(date);
+
+    const dateString = date.toISOString();
+    setMarkedDates(prevMarkedDates => {
+      const newMarkedDates = new Set(prevMarkedDates);
+      if (newMarkedDates.has(dateString)) {
+        newMarkedDates.delete(dateString);
+      } else {
+        newMarkedDates.add(dateString);
+      }
+      return newMarkedDates;
+    });
+
+    if (onMarkedDatesChange) {
+      const newMarkedDates = new Set(markedDates);
+      const dateString = date.toISOString();
+      if (newMarkedDates.has(dateString)) {
+        newMarkedDates.delete(dateString);
+      } else {
+        newMarkedDates.add(dateString);
+      }
+      onMarkedDatesChange(newMarkedDates);
+    }
   };
   
   // Calculate item width based on screen width
@@ -84,6 +111,7 @@ export default function DateSelector({
         renderItem={({ item }) => {
           const formattedDate = formatDate(item);
           const isSelected = dayjs(selectedDate).isSame(dayjs(item), 'day');
+          const isMarked = markedDates.has(item.toISOString());
           
           return (
             <TouchableOpacity
@@ -105,7 +133,8 @@ export default function DateSelector({
                       ? theme.colors.white 
                       : theme.colors.text.secondary,
                     fontFamily: theme.fontFamily.regular
-                  }
+                  },
+                  isMarked && { textDecorationLine: 'line-through' }
                 ]}
               >
                 {formattedDate.weekday}
@@ -128,7 +157,8 @@ export default function DateSelector({
                           ? theme.colors.primary[500] 
                           : theme.colors.text.primary,
                       fontFamily: theme.fontFamily.semiBold
-                    }
+                    },
+                    isMarked && { textDecorationLine: 'line-through' }
                   ]}
                 >
                   {formattedDate.day}

@@ -18,8 +18,10 @@ import { getActivityLogs } from '@/utils/supabase';
 import ActivityHistory from '@/components/ActivityHistory';
 import ProgressPhotos from '@/components/ProgressPhotos';
 import ProfileWeightMetrics from '@/components/ProfileWeightMetrics';
+import DateSelector from '@/components/DateSelector';
+import { getStreakDays, updateStreakDays } from '@/utils/supabase';
 import { getMetricEntries, MetricEntry } from '@/services/metricDataService';
-
+import WeightChart from '@/components/WeightChart';
 export default function ProfileScreen() {
   const theme = useTheme();
   const router = useRouter();
@@ -32,6 +34,8 @@ export default function ProfileScreen() {
   const [weightEntries, setWeightEntries] = useState<MetricEntry[]>([]);
   const [weightData, setWeightData] = useState<number[]>([]);
   const [weightDates, setWeightDates] = useState<string[]>([]);
+  const [streakDays, setStreakDays] = useState<Set<string>>(new Set());
+  const [isLoadingStreakDays, setIsLoadingStreakDays] = useState(true);
 
   // Fetch weight metrics data
   useEffect(() => {
@@ -84,7 +88,7 @@ export default function ProfileScreen() {
           ) || [];
           setUserActivities(sortedActivities);
         } catch (error) {
-          console.error('Error fetching activities:', error);
+          console.error('Error fetching acticonst [activities, setActivities] = useState<ActivityLog[]>([]);vities:', error);
         } finally {
           setIsLoading(false);
         }
@@ -92,6 +96,27 @@ export default function ProfileScreen() {
     };
 
     fetchActivities();
+  }, [user?.id]);
+
+  // Fetch streak days on load
+  useEffect(() => {
+    const fetchUserStreakDays = async () => {
+      if (user?.id) {
+        setIsLoadingStreakDays(true);
+        try {
+          const fetchedStreakDaysArray = await getStreakDays(user.id);
+          if (fetchedStreakDaysArray) {
+            setStreakDays(new Set(fetchedStreakDaysArray));
+          }
+        } catch (error) {
+          console.error('Error fetching streak days:', error);
+          // Optionally, show an alert to the user
+        } finally {
+          setIsLoadingStreakDays(false);
+        }
+      }
+    };
+    fetchUserStreakDays();
   }, [user?.id]);
   
   // Handle sign out
@@ -112,6 +137,18 @@ export default function ProfileScreen() {
   const toggleDarkMode = () => {
     setDarkModeEnabled(!darkModeEnabled);
     // In a real app, this would update the theme
+  };
+
+  const handleStreakDaysChange = async (newStreakDays: Set<string>) => {
+    setStreakDays(newStreakDays);
+    if (user?.id) {
+      try {
+        await updateStreakDays(user.id, Array.from(newStreakDays));
+      } catch (error) {
+        console.error('Error updating streak days in Supabase:', error);
+        // Optionally, show an alert to the user and revert local state if needed
+      }
+    }
   };
   
   return (
@@ -200,7 +237,7 @@ export default function ProfileScreen() {
               color: theme.colors.text.primary,
               fontFamily: theme.fontFamily.semiBold
             }]}>
-              12
+              {streakDays.size}
             </Text>
             <Text style={[styles.statLabel, { 
               color: theme.colors.text.secondary,
@@ -210,6 +247,12 @@ export default function ProfileScreen() {
             </Text>
           </View>
         </View>
+
+        <DateSelector 
+          onDateSelect={(date) => console.log('Date selected:', date)} // Placeholder, you might want to use this for other features
+          initialMarkedDates={streakDays}
+          onMarkedDatesChange={handleStreakDaysChange}
+        />
         
         {/* Metrics Section */}
         <View style={styles.metricsSection}>
@@ -230,6 +273,10 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           </View>
           
+          <View style={[styles.metricsCard, { backgroundColor: theme.colors.background.card }]}>
+          <WeightChart />
+          </View>
+
           <View style={[styles.metricsCard, { backgroundColor: theme.colors.background.card }]}>
             <ProfileWeightMetrics 
               weightData={weightData.length > 0 ? weightData : [0]}
@@ -323,8 +370,8 @@ export default function ProfileScreen() {
 
             <View style={[styles.settingDivider, { backgroundColor: theme.colors.dark[800] }]} />
             
-            <TouchableOpacity style={styles.settingItem}>
-              <View style={styles.settingLeft}>
+            <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/(steps)')}>
+                <View style={styles.settingLeft}>
                 <View style={[styles.settingIconContainer, { backgroundColor: theme.colors.primary[900] }]}>
                   <Footprints size={20} color={theme.colors.primary[500]} />
                 </View>
@@ -334,7 +381,7 @@ export default function ProfileScreen() {
                 }]}>
                   Steps
                 </Text>
-              </View>
+                </View>
               <ChevronRight size={20} color={theme.colors.text.secondary} />
             </TouchableOpacity>
           </View>

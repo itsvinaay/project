@@ -8,9 +8,11 @@ import {
   TextInput,
   ScrollView,
   Alert,
-  Image
+  Image,
+  ActivityIndicator
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
 import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
 import { addActivityLog } from '@/utils/supabase';
@@ -19,7 +21,8 @@ import {
   Droplet, 
   Utensils, 
   Dumbbell, 
-  ArrowRight
+  ArrowRight,
+  Camera
 } from 'lucide-react-native';
 
 type ActivityType = 'sleep' | 'water' | 'food' | 'workout' | 'meal';
@@ -43,29 +46,122 @@ export default function AddActivityScreen() {
   const [foodName, setFoodName] = useState('');
   const [calories, setCalories] = useState('');
   const [image, setImage] = useState<string | null>(null);
+  const [isAnalyzingImage, setIsAnalyzingImage] = useState(false);
   
-  // Function to handle image picking
-  const pickImage = async () => {
+  // Function to open the camera, capture a meal photo, and analyze it
+  const handleTakeMealPhoto = async () => {
     try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission required', 'Please allow access to your photo library to upload images');
+        Alert.alert('Permission required', 'Please allow access to your camera to take photos');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 1,
+      });
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const uri = result.assets[0].uri;
+        setImage(uri);
+        analyzeImageWithVisionAPI(uri);
+      }
+    } catch (error) {
+      console.error('Error taking photo:', error);
+      Alert.alert('Error', 'Failed to take photo');
+    }
+  };
+
+  // Function to take a photo using the camera
+  const takePhotoAsync = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission required', 'Please allow access to your camera to take photos');
         return;
       }
 
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      const result = await ImagePicker.launchCameraAsync({
         allowsEditing: true,
         aspect: [4, 3],
         quality: 1,
       });
 
-      if (!result.canceled) {
-        setImage(result.assets[0].uri);
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const uri = result.assets[0].uri;
+        setImage(uri);
+        analyzeImageWithVisionAPI(uri);
       }
     } catch (error) {
-      console.error('Error picking image:', error);
-      Alert.alert('Error', 'Failed to pick image');
+      console.error('Error taking photo:', error);
+      Alert.alert('Error', 'Failed to take photo');
+    }
+  };
+
+
+
+  // Function to analyze image with Google Cloud Vision API
+  const analyzeImageWithVisionAPI = async (imageUri: string) => {
+    if (!imageUri) return;
+
+    // Replace with your actual API key
+    const GOOGLE_CLOUD_VISION_API_KEY = "AIzaSyAGqRkkmYWPWIQVUgyKEasYASNrDypkPog";
+    const apiUrl = `https://vision.googleapis.com/v1/images:annotate?key=${GOOGLE_CLOUD_VISION_API_KEY}`;
+
+    setIsAnalyzingImage(true);
+    try {
+      const base64ImageData = await FileSystem.readAsStringAsync(imageUri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      const requestBody = {
+        requests: [
+          {
+            image: {
+              content: base64ImageData,
+            },
+            features: [
+              { type: 'LABEL_DETECTION', maxResults: 5 },
+              // You can add other features like 'OBJECT_LOCALIZATION'
+            ],
+          },
+        ],
+      };
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.responses && result.responses.length > 0) {
+        const labels = result.responses[0].labelAnnotations;
+        if (labels && labels.length > 0) {
+          // Let's use the top label for the food name for now
+          const topLabel = labels[0].description;
+          setFoodName(prev => prev ? `${prev} (${topLabel})` : topLabel); // Append or set
+          // You could also populate notes with other labels
+          const otherLabels = labels.slice(1).map((l: any) => l.description).join(', ');
+          if (otherLabels) {
+            setNotes(prev => prev ? `${prev}\nDetected: ${otherLabels}` : `Detected: ${otherLabels}`);
+          }
+          Alert.alert('Image Analyzed', `Detected: ${topLabel}`);
+        } else {
+          Alert.alert('Image Analyzed', 'No specific labels detected.');
+        }
+      } else {
+        console.error('Google Vision API error:', result);
+        Alert.alert('API Error', result.error?.message || 'Failed to analyze image.');
+      }
+    } catch (error) {
+      console.error('Error analyzing image:', error);
+      Alert.alert('Error', 'An error occurred while analyzing the image.');
+    } finally {
+      setIsAnalyzingImage(false);
     }
   };
   
@@ -180,92 +276,92 @@ export default function AddActivityScreen() {
       setIsSubmitting(false);
     }
   };
-  
+
+  // --- MAIN RENDER ---
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background.primary }]}>
-      <ScrollView 
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-      >
-        <View style={styles.header}>
-          <Text style={[styles.title, { 
-            color: theme.colors.text.primary,
-            fontFamily: theme.fontFamily.semiBold
-          }]}>
-            Add Activity
-          </Text>
-          <Text style={[styles.subtitle, { 
-            color: theme.colors.text.secondary,
-            fontFamily: theme.fontFamily.regular
-          }]}>
-            Log your daily activities to track your progress
-          </Text>
-        </View>
-        
-        <View style={styles.activityTypesContainer}>
-          {activityOptions.map((option) => (
-            <TouchableOpacity
-              key={option.type}
-              style={[
-                styles.activityTypeButton,
-                { 
-                  backgroundColor: selectedType === option.type 
-                    ? theme.colors.primary[900] 
-                    : theme.colors.background.card 
-                }
-              ]}
-              onPress={() => setSelectedType(option.type)}
-            >
-              <View style={styles.activityTypeContent}>
-                {option.icon}
-                <Text style={[styles.activityTypeLabel, { 
-                  color: selectedType === option.type 
-                    ? theme.colors.primary[500] 
-                    : theme.colors.text.primary,
-                  fontFamily: theme.fontFamily.medium
-                }]}>
-                  {option.label}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
-        
-        <View style={[styles.formCard, { backgroundColor: theme.colors.background.card }]}>
-          {selectedType === 'meal' ? (
-            <View style={styles.mealContainer}>
-              <Text style={[styles.formLabel, { 
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background.primary }]} > 
+      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+        <View>
+          <View style={styles.header}>
+            <View>
+              <Text style={[styles.title, { 
                 color: theme.colors.text.primary,
-                fontFamily: theme.fontFamily.medium
-              }]}>
-                Food Name
-              </Text>
-              <View style={[styles.inputContainer, { borderColor: theme.colors.dark[700] }]}>
+                fontFamily: theme.fontFamily.semiBold
+              }]}>Add Activity</Text>
+              <Text style={[styles.subtitle, { 
+                color: theme.colors.text.secondary,
+                fontFamily: theme.fontFamily.regular
+              }]}>Log your daily activities to track your progress</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => {
+                if (selectedType === 'meal') {
+                  handleTakeMealPhoto();
+                } else {
+                  Alert.alert('Switch to Meal', 'Switch to "Meal" to add a meal photo.');
+                }
+              }}
+              style={styles.cameraIconContainer}
+              disabled={isAnalyzingImage}
+            >
+              {isAnalyzingImage ? (
+                <ActivityIndicator size="small" color={theme.colors.primary[500]} />
+              ) : (
+                <Camera size={28} color={theme.colors.primary[500]} />
+              )}
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.activityTypesContainer}>
+            {activityOptions.map(option => (
+              <TouchableOpacity
+                key={option.type}
+                style={[
+                  styles.activityTypeButton,
+                  {
+                    backgroundColor: selectedType === option.type
+                      ? theme.colors.primary[900]
+                      : theme.colors.background.card,
+                  },
+                ]}
+                onPress={() => setSelectedType(option.type)}
+              >
+                <View style={styles.activityTypeContent}>
+                  {option.icon}
+                  <Text
+                    style={[
+                      styles.activityTypeLabel,
+                      {
+                        color: selectedType === option.type
+                          ? theme.colors.primary[500]
+                          : theme.colors.text.primary,
+                      },
+                    ]}
+                  >
+                    {option.label}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {selectedType === 'meal' ? (
+            <View>
+              <Text style={styles.formLabel}>Food Name</Text>
+              <View style={styles.inputContainer}>
                 <TextInput
-                  style={[styles.input, { 
-                    color: theme.colors.text.primary,
-                    fontFamily: theme.fontFamily.regular
-                  }]}
+                  style={styles.input}
                   placeholder="Enter food name"
                   placeholderTextColor={theme.colors.text.tertiary}
                   value={foodName}
                   onChangeText={setFoodName}
                 />
               </View>
-              
-              <Text style={[styles.formLabel, { 
-                color: theme.colors.text.primary,
-                fontFamily: theme.fontFamily.medium,
-                marginTop: 16
-              }]}>
-                Calories
-              </Text>
-              <View style={[styles.inputContainer, { borderColor: theme.colors.dark[700] }]}>
+
+              <Text style={styles.formLabel}>Calories</Text>
+              <View style={styles.inputContainer}>
                 <TextInput
-                  style={[styles.input, { 
-                    color: theme.colors.text.primary,
-                    fontFamily: theme.fontFamily.regular
-                  }]}
+                  style={styles.input}
                   placeholder="Enter calories"
                   placeholderTextColor={theme.colors.text.tertiary}
                   value={calories}
@@ -273,16 +369,7 @@ export default function AddActivityScreen() {
                   keyboardType="numeric"
                 />
               </View>
-              
-              <TouchableOpacity 
-                style={[styles.imageButton, { borderColor: theme.colors.primary[500] }]}
-                onPress={pickImage}
-              >
-                <Text style={[styles.imageButtonText, { color: theme.colors.primary[500] }]}>
-                  {image ? 'Change Image' : 'Add Image (Optional)'}
-                </Text>
-              </TouchableOpacity>
-              
+
               {image && (
                 <View style={styles.imagePreview}>
                   <Image source={{ uri: image }} style={styles.previewImage} />
@@ -291,18 +378,12 @@ export default function AddActivityScreen() {
             </View>
           ) : (
             <View>
-              <Text style={[styles.formLabel, { 
-                color: theme.colors.text.primary,
-                fontFamily: theme.fontFamily.medium
-              }]}>
+              <Text style={styles.formLabel}>
                 {currentActivity?.label} ({currentActivity?.unit})
               </Text>
-              <View style={[styles.inputContainer, { borderColor: theme.colors.dark[700] }]}>
+              <View style={styles.inputContainer}>
                 <TextInput
-                  style={[styles.input, { 
-                    color: theme.colors.text.primary,
-                    fontFamily: theme.fontFamily.regular
-                  }]}
+                  style={styles.input}
                   placeholder={currentActivity?.placeholder}
                   placeholderTextColor={theme.colors.text.tertiary}
                   value={value}
@@ -310,31 +391,16 @@ export default function AddActivityScreen() {
                   keyboardType="numeric"
                 />
                 <View style={styles.unitContainer}>
-                  <Text style={[styles.unitText, { 
-                    color: theme.colors.text.secondary,
-                    fontFamily: theme.fontFamily.regular
-                  }]}>
-                    {currentActivity?.unit}
-                  </Text>
+                  <Text style={styles.unitText}>{currentActivity?.unit}</Text>
                 </View>
               </View>
             </View>
           )}
-          
-          <Text style={[styles.formLabel, { 
-            color: theme.colors.text.primary,
-            fontFamily: theme.fontFamily.medium,
-            marginTop: 16,
-          }]}>
-            Notes (optional)
-          </Text>
-          
-          <View style={[styles.textareaContainer, { borderColor: theme.colors.dark[700] }]}>
+
+          <Text style={styles.formLabel}>Notes (optional)</Text>
+          <View style={styles.textareaContainer}>
             <TextInput
-              style={[styles.textarea, { 
-                color: theme.colors.text.primary,
-                fontFamily: theme.fontFamily.regular
-              }]}
+              style={styles.textarea}
               placeholder="Add any additional details..."
               placeholderTextColor={theme.colors.text.tertiary}
               value={notes}
@@ -344,28 +410,28 @@ export default function AddActivityScreen() {
               textAlignVertical="top"
             />
           </View>
+
+          <TouchableOpacity
+            style={[
+              styles.submitButton,
+              {
+                backgroundColor: theme.colors.primary[500],
+                opacity: isSubmitting ? 0.7 : 1,
+              },
+            ]}
+            onPress={handleSubmit}
+            disabled={isSubmitting}
+          >
+            <Text style={styles.submitButtonText}>
+              {isSubmitting ? 'Adding...' : 'Add Activity'}
+            </Text>
+            {!isSubmitting && <ArrowRight size={20} color="#fff" />}
+          </TouchableOpacity>
         </View>
-        
-        <TouchableOpacity
-          style={[styles.submitButton, { 
-            backgroundColor: theme.colors.primary[500],
-            opacity: isSubmitting ? 0.7 : 1 
-          }]}
-          onPress={handleSubmit}
-          disabled={isSubmitting}
-        >
-          <Text style={[styles.submitButtonText, { 
-            color: '#fff',
-            fontFamily: theme.fontFamily.semiBold
-          }]}>
-            {isSubmitting ? 'Adding...' : 'Add Activity'}
-          </Text>
-          {!isSubmitting && <ArrowRight size={20} color="#fff" />}
-        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
@@ -377,6 +443,10 @@ const styles = StyleSheet.create({
   },
   header: {
     marginBottom: 24,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16, // Added for better spacing of the icon
   },
   title: {
     fontSize: 28,
@@ -477,5 +547,8 @@ const styles = StyleSheet.create({
   submitButtonText: {
     fontSize: 16,
     marginRight: 8,
+  },
+  cameraIconContainer: {
+    padding: 8, // Added for easier touchability
   },
 });

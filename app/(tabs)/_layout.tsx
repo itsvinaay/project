@@ -9,7 +9,6 @@ export default function TabLayout() {
   const theme = useTheme();
   const { userProfile } = useAuth();
   
-  // Don't render tabs if user isn't authenticated or is not a client
   if (!userProfile || userProfile.role !== 'client') {
     return null;
   }
@@ -18,16 +17,16 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: theme.colors.primary[500],
-        tabBarInactiveTintColor: theme.colors.text.secondary,
+        tabBarInactiveTintColor: theme.colors.dark[400],
         tabBarStyle: {
-          backgroundColor: theme.colors.background.card,
-          borderTopColor: theme.colors.background.card,
-          height: 60,
-          paddingBottom: 8,
+          backgroundColor: theme.colors.dark[950],
+          borderTopColor: theme.colors.dark[800],
+          height: theme.spacing[15],
+          paddingBottom: theme.spacing[2],
         },
         tabBarLabelStyle: {
           fontFamily: theme.fontFamily.medium,
-          fontSize: 12,
+          fontSize: theme.fontSize.sm,
         },
         headerShown: false,
       }}
@@ -47,8 +46,8 @@ export default function TabLayout() {
         options={{
           title: '',
           tabBarIcon: ({ color }) => (
-            <View style={styles.addButton}>
-              <Plus size={24} color={theme.colors.white} />
+            <View style={[styles.addButton, { backgroundColor: theme.colors.primary[500] }]}>
+              <Plus size={24} color={theme.colors.dark[950]} />
             </View>
           ),
         }}
@@ -69,14 +68,13 @@ export default function TabLayout() {
 
 const styles = StyleSheet.create({
   addButton: {
-    backgroundColor: '#00BFFF',
     width: 56,
     height: 56,
     borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 32,
-    shadowColor: '#00BFFF',
+    shadowColor: 'currentColor',
     shadowOffset: {
       width: 0,
       height: 2,

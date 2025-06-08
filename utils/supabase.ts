@@ -40,6 +40,7 @@ export interface UserProfile {
   approved_by?: string;
   created_at: string;
   updated_at: string;
+  streak_days?: string[]; // Array of ISO date strings
 }
 
 export interface DashboardStats {
@@ -365,6 +366,48 @@ export const getActivityLogs = async (
   const { data, error } = await query;
   if (error) throw error;
   return data as ActivityLog[];
+};
+
+export const getStreakDays = async (userId: string): Promise<string[] | null> => {
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('streak_days')
+      .eq('id', userId)
+      .single();
+
+    if (error) {
+      // If it's a 'PGRST116' (single row not found), it means no streak_days set yet, which is fine.
+      if (error.code !== 'PGRST116') {
+        console.error('Error fetching streak days:', error.message);
+        throw error;
+      }
+      return []; // Return empty array if no record or streak_days is null
+    }
+    return data?.streak_days || []; // Ensure it's an array
+  } catch (error) {
+    console.error('Exception in getStreakDays:', error);
+    // Depending on desired behavior, you might re-throw or return null/empty array
+    return []; 
+  }
+};
+
+export const updateStreakDays = async (userId: string, streakDays: string[]): Promise<void> => {
+  try {
+    const { error } = await supabase
+      .from('profiles')
+      .update({ streak_days: streakDays, updated_at: new Date().toISOString() })
+      .eq('id', userId);
+
+    if (error) {
+      console.error('Error updating streak days:', error.message);
+      throw error;
+    }
+    console.log('Streak days updated successfully for user:', userId);
+  } catch (error) {
+    console.error('Exception in updateStreakDays:', error);
+    throw error;
+  }
 };
 
 export interface WorkoutPlan {
