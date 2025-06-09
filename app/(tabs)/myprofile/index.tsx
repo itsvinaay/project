@@ -22,6 +22,8 @@ import DateSelector from '@/components/DateSelector';
 import { getStreakDays, updateStreakDays } from '@/utils/supabase';
 import { getMetricEntries, MetricEntry } from '@/services/metricDataService';
 import WeightChart from '@/components/WeightChart';
+import MetricChart from '@/components/MetricChart';
+
 export default function ProfileScreen() {
   const theme = useTheme();
   const router = useRouter();
@@ -75,6 +77,8 @@ export default function ProfileScreen() {
     return () => clearInterval(weightInterval);
   }, []);
   
+  
+  // Fetch streak days on load
   useEffect(() => {
     const fetchUserStreakDays = async () => {
       if (user?.id) {
@@ -133,43 +137,25 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
+        {/* Fixed Header */}
         <View style={styles.header}>
           <Text style={[styles.title, { 
             color: theme.colors.text.primary,
             fontFamily: theme.fontFamily.semiBold
           }]}>
-            Profile
+            You
           </Text>
+          <TouchableOpacity style={styles.settingsButton}>
+            <View style={styles.profileInitials}>
+              <Text style={styles.initialsText}>VD</Text>
+            </View>
+            <View style={styles.settingsIconWrapper}>
+              <Settings size={16} color={theme.colors.text.primary} />
+            </View>
+          </TouchableOpacity>
         </View>
         
-        <View style={[styles.profileCard, { backgroundColor: theme.colors.background.card }]}>
-          
-          
-          <View style={styles.profileInfo}>
-            <Text style={[styles.profileName, { 
-              color: theme.colors.text.primary,
-              fontFamily: theme.fontFamily.semiBold
-            }]}>
-              {userProfile?.display_name || user?.displayName || 'User'}
-            </Text>
-            <Text style={[styles.profileEmail, { 
-              color: theme.colors.text.secondary,
-              fontFamily: theme.fontFamily.regular
-            }]}>
-              {user?.email || 'user@example.com'}
-            </Text>
-            
-            <TouchableOpacity style={[styles.editButton, { borderColor: theme.colors.primary[500] }]}>
-              <Text style={[styles.editButtonText, { 
-                color: theme.colors.primary[500],
-                fontFamily: theme.fontFamily.medium
-              }]}>
-                Edit Profile
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-        
+        {/* Stats Card */}
         <View style={[styles.statsCard, { backgroundColor: theme.colors.background.card }]}>
           <View style={styles.statItem}>
             <Text style={[styles.statValue, { 
@@ -221,54 +207,38 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        <DateSelector 
-          onDateSelect={(date) => console.log('Date selected:', date)} // Placeholder, you might want to use this for other features
-          initialMarkedDates={streakDays}
-          onMarkedDatesChange={handleStreakDaysChange}
-        />
         
-        {/* Metrics Section */}
-        <View style={styles.metricsSection}>
-          <View style={styles.metricsSectionHeader}>
-            <Text style={[styles.metricsSectionTitle, { 
-              color: theme.colors.text.primary,
-              fontFamily: theme.fontFamily.semiBold
-            }]}>
-              Metrics
-            </Text>
-            <TouchableOpacity onPress={() => router.push('/(metrics)')}>
-              <Text style={[styles.viewMoreText, { 
-                color: theme.colors.primary[500],
-                fontFamily: theme.fontFamily.medium
-              }]}>
-                View more
-              </Text>
-            </TouchableOpacity>
-          </View>
-          
-          <View style={[styles.metricsCard, { backgroundColor: theme.colors.background.card }]}>
-          <WeightChart />
-          </View>
-
-          <View style={[styles.metricsCard, { backgroundColor: theme.colors.background.card }]}>
-            <ProfileWeightMetrics 
-              weightData={weightData.length > 0 ? weightData : [0]}
-              dates={weightDates.length > 0 ? weightDates : ['Today']}
-              unit={weightEntries.length > 0 ? weightEntries[0].unit : 'KG'}
-              isLoading={isLoading}
-            />
-          </View>
-        </View>
-
-        {/* Settings Section */}
-        <View style={styles.settingsSection}>
-          <Text style={[styles.sectionTitle, { 
-            color: theme.colors.text.primary,
-            fontFamily: theme.fontFamily.semiBold
-          }]}>
-            Settings
-          </Text>
-          
+          <View style={styles.metricsSection}>
+                    <View style={styles.metricsSectionHeader}>
+                      <Text style={[styles.metricsSectionTitle, { 
+                        color: theme.colors.text.primary,
+                        fontFamily: theme.fontFamily.semiBold
+                      }]}>
+                        Metrics
+                      </Text>
+                      <TouchableOpacity onPress={() => router.push('/myprofile/metrics')}>
+                        <Text style={[styles.viewMoreText, { 
+                          color: theme.colors.primary[500],
+                          fontFamily: theme.fontFamily.medium
+                        }]}>
+                          View more
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                    
+                    <View style={[styles.metricsCard, { backgroundColor: theme.colors.background.card }]}>
+                              <Text style={styles.chartTitle}>WEIGHT (KG)</Text>
+                    
+                             <MetricChart 
+                               data={[
+                                 { date: '4/5', value: 58 },
+                                 { date: '4/17', value: 57 },
+                                 { date: '5/23', value: 52 },
+                                 { date: '6/3', value: 58 },
+                               ]}
+                               height={200}
+                             />
+                    </View>
           <View style={[styles.settingsCard, { backgroundColor: theme.colors.background.card }]}>
             <View style={styles.settingItem}>
               <View style={styles.settingLeft}>
@@ -292,18 +262,18 @@ export default function ProfileScreen() {
             
             <View style={[styles.settingDivider, { backgroundColor: theme.colors.dark[800] }]} />
             
-            <TouchableOpacity style={styles.settingItem}>
-              <View style={styles.settingLeft}>
-                <View style={[styles.settingIconContainer, { backgroundColor: theme.colors.primary[900] }]}>
-                  <Activity size={20} color={theme.colors.primary[500]} />
-                </View>
-                <Text style={[styles.settingLabel, { 
-                  color: theme.colors.text.primary,
-                  fontFamily: theme.fontFamily.medium
-                }]}>
-                  Activity History
-                </Text>
-              </View>
+            <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/activity')}>
+                  <View style={styles.settingLeft}>
+                  <View style={[styles.settingIconContainer, { backgroundColor: theme.colors.primary[900] }]}>
+                    <Activity size={20} color={theme.colors.primary[500]} />
+                  </View>
+                  <Text style={[styles.settingLabel, { 
+                    color: theme.colors.text.primary,
+                    fontFamily: theme.fontFamily.medium
+                  }]}>
+                    Activity History
+                  </Text>
+                  </View>
               <ChevronRight size={20} color={theme.colors.text.secondary} />
             </TouchableOpacity>
 
@@ -343,7 +313,7 @@ export default function ProfileScreen() {
 
             <View style={[styles.settingDivider, { backgroundColor: theme.colors.dark[800] }]} />
             
-            <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/(steps)')}>
+            <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/myprofile/steps')}>
                 <View style={styles.settingLeft}>
                 <View style={[styles.settingIconContainer, { backgroundColor: theme.colors.primary[900] }]}>
                   <Footprints size={20} color={theme.colors.primary[500]} />
@@ -360,44 +330,6 @@ export default function ProfileScreen() {
           </View>
         </View>
         
-        {/* Progress Photos Section */}
-        <View style={styles.settingsSection}>
-          <View style={styles.sectionHeader}>
-            <Camera size={20} color={theme.colors.primary[500]} style={styles.sectionIcon} />
-            <Text style={[styles.sectionTitle, { 
-              color: theme.colors.text.primary,
-              fontFamily: theme.fontFamily.semiBold
-            }]}>
-              Progress Photos
-            </Text>
-          </View>
-          <View style={[styles.sectionCard, { backgroundColor: theme.colors.background.card }]}>
-            <ProgressPhotos userId={user?.id || ''} />
-          </View>
-        </View>
-
-        {/* Activity History Section */}
-        <View style={styles.settingsSection}>
-          <View style={styles.sectionHeader}>
-            <Activity size={20} color={theme.colors.primary[500]} style={styles.sectionIcon} />
-            <Text style={[styles.sectionTitle, { 
-              color: theme.colors.text.primary,
-              fontFamily: theme.fontFamily.semiBold
-            }]}>
-              Activity History
-            </Text>
-          </View>
-          <View style={[styles.sectionCard, { backgroundColor: theme.colors.background.card }]}>
-            {isLoading ? (
-              <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background.card }]}>
-                <Text style={{ color: theme.colors.text.secondary }}>Loading activities...</Text>
-              </View>
-            ) : (
-              <ActivityHistory activities={userActivities} />
-            )}
-          </View>
-        </View>
-
         {/* Sign Out Button */}
         <TouchableOpacity 
           style={[styles.signOutButton, { backgroundColor: theme.colors.background.card }]}
@@ -429,13 +361,47 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
-    paddingTop: 56,
+    paddingTop: 16, // Reduced from 56 to fix spacing
   },
+  // Fixed Header Styles
   header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 24,
+    paddingHorizontal: 4,
   },
   title: {
-    fontSize: 28,
+    fontSize: 32,
+    fontWeight: 'bold',
+  },
+  settingsButton: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  profileInitials: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#3B82F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  initialsText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  settingsIconWrapper: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 10,
+    padding: 4,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
   },
   profileCard: {
     borderRadius: 16,
@@ -471,19 +437,31 @@ const styles = StyleSheet.create({
   editButtonText: {
     fontSize: 14,
   },
+   chartTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+    marginBottom: 8,
+  },
   statsCard: {
     borderRadius: 16,
-    padding: 16,
+    padding: 20,
     marginBottom: 24,
     flexDirection: 'row',
     justifyContent: 'space-around',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   statItem: {
     alignItems: 'center',
   },
   statValue: {
-    fontSize: 20,
+    fontSize: 24,
     marginBottom: 4,
+    fontWeight: '600',
   },
   statLabel: {
     fontSize: 14,
@@ -517,12 +495,17 @@ const styles = StyleSheet.create({
     minHeight: 100,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 20,
     marginBottom: 12,
   },
   settingsCard: {
     borderRadius: 16,
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   settingItem: {
     flexDirection: 'row',
@@ -578,6 +561,11 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 16,
     marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   signOutText: {
     fontSize: 16,
